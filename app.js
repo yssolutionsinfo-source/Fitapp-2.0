@@ -338,12 +338,15 @@ $("form-profile").addEventListener("submit", async (e) => {
 
   $("profile-submit").disabled = true;
   try {
-    const { error: pe } = await db.from("profiles").upsert({ id: state.user.id, ...p });
+    const uid = await gebruikerId();
+    if (!uid) throw new Error("Je sessie is verlopen. Log opnieuw in en probeer het nog eens.");
+
+    const { error: pe } = await db.from("profiles").upsert({ id: uid, ...p });
     if (pe) throw pe;
 
     const { error: we } = await db
       .from("weight_logs")
-      .upsert({ user_id: state.user.id, weight_kg: weight, logged_on: today() }, { onConflict: "user_id,logged_on" });
+      .upsert({ user_id: uid, weight_kg: weight, logged_on: today() }, { onConflict: "user_id,logged_on" });
     if (we) throw we;
 
     const t = computeTargets(p, weight);
@@ -351,7 +354,7 @@ $("form-profile").addEventListener("submit", async (e) => {
     delete t.multiplier;
     const { error: te } = await db
       .from("macro_targets")
-      .upsert({ user_id: state.user.id, effective_from: today(), ...t }, { onConflict: "user_id,effective_from" });
+      .upsert({ user_id: uid, effective_from: today(), ...t }, { onConflict: "user_id,effective_from" });
     if (te) throw te;
 
     await loadAll();
@@ -530,9 +533,12 @@ $("form-meal").addEventListener("submit", async (e) => {
 
   $("meal-submit").disabled = true;
   try {
+    const uid = await gebruikerId();
+    if (!uid) throw new Error("Je sessie is verlopen. Log opnieuw in en probeer het nog eens.");
+
     let photo_path = null;
     if (state.photo) {
-      photo_path = `${state.user.id}/${crypto.randomUUID()}.jpg`;
+      photo_path = `${uid}/${crypto.randomUUID()}.jpg`;
       const { error } = await db.storage
         .from("meal-photos")
         .upload(photo_path, state.photo.blob, { contentType: "image/jpeg" });
@@ -543,7 +549,7 @@ $("form-meal").addEventListener("submit", async (e) => {
       state.analysis && Math.abs((state.analysis.calories ?? 0) - kcal) > 1;
 
     const { error } = await db.from("meals").insert({
-      user_id: state.user.id,
+      user_id: uid,
       name,
       meal_type: $("m-type").value,
       photo_path,
@@ -670,9 +676,12 @@ $("form-weight").addEventListener("submit", async (e) => {
   if (!value || value < 30 || value > 400) return fail("weight-error", "Vul een gewicht tussen 30 en 400 kg in.");
 
   try {
+    const uid = await gebruikerId();
+    if (!uid) return fail("weight-error", "Je sessie is verlopen. Log opnieuw in en probeer het nog eens.");
+
     const { error } = await db
       .from("weight_logs")
-      .upsert({ user_id: state.user.id, weight_kg: value, logged_on: today() }, { onConflict: "user_id,logged_on" });
+      .upsert({ user_id: uid, weight_kg: value, logged_on: today() }, { onConflict: "user_id,logged_on" });
     if (error) throw error;
 
     // Doelen meebewegen: bij een fors gewijzigd gewicht klopt het oude budget niet meer.
@@ -681,7 +690,7 @@ $("form-weight").addEventListener("submit", async (e) => {
     delete t.multiplier;
     await db
       .from("macro_targets")
-      .upsert({ user_id: state.user.id, effective_from: today(), ...t }, { onConflict: "user_id,effective_from" });
+      .upsert({ user_id: uid, effective_from: today(), ...t }, { onConflict: "user_id,effective_from" });
 
     $("w-value").value = "";
     await loadAll();
@@ -695,8 +704,11 @@ $("form-weight").addEventListener("submit", async (e) => {
 /* ======================= DATA LADEN ======================= */
 
 async function loadAll() {
+  const uid = await gebruikerId();
+  if (!uid) throw new Error("Geen geldige sessie.");
+
   const [profile, targets, weights] = await Promise.all([
-    db.from("profiles").select("*").eq("id", state.user.id).maybeSingle(),
+    db.from("profiles").select("*").eq("id", uid).maybeSingle(),
     db.from("macro_targets").select("*").order("effective_from", { ascending: false }).limit(1).maybeSingle(),
     db.from("weight_logs").select("*").order("logged_on", { ascending: false }).limit(60),
   ]);
@@ -897,7 +909,7 @@ function renderProgress() {
 }
 
 function renderProfile() {
-  $("profile-email").textContent = state.user.email;
+  $("profile-email").textContent = state.user?.email ?? "";
   const t = state.targets;
   const p = state.profile;
   if (!t || !p) return;
@@ -952,7 +964,14 @@ $("nav").addEventListener("click", (e) => {
 let herstelModus = false;
 
 db.auth.onAuthStateChange((event, session) => {
-  state.user = session?.user ?? null;
+  // Supabase stuurt ook signalen zonder sessie bij tokenverversing en bij
+  // terugkeren naar het tabblad. Die mogen je niet uit het geheugen wissen,
+  // anders val je er middenin een handeling uit.
+  if (session?.user) {
+    state.user = session.user;
+  } else if (event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
+    state.user = null;
+  }
 
   // Klikt iemand op de herstellink uit de mail, dan logt Supabase hem in en
   // stuurt dit signaal. Zonder deze afslag belandt hij gewoon op zijn dagbudget
@@ -961,6 +980,21 @@ db.auth.onAuthStateChange((event, session) => {
 
   setTimeout(() => naAuthWijziging(), 0);
 });
+
+// Het geheugen kan achterlopen, dus voor alles wat wegschrijft halen we de
+// gebruiker op bij de bron. Eén verversingspoging voordat we opgeven.
+async function gebruikerId() {
+  if (state.user?.id) return state.user.id;
+
+  const { data: { session } } = await db.auth.getSession();
+  let user = session?.user;
+  if (!user) {
+    const { data: ververst } = await db.auth.refreshSession();
+    user = ververst?.session?.user;
+  }
+  if (user) state.user = user;
+  return user?.id ?? null;
+}
 
 async function naAuthWijziging() {
   $("boot").hidden = true;
