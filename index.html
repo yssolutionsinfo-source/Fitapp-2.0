@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dagbudget</title>
+<meta name="description" content="Fotografeer wat je eet en zie wat er van je dag over is.">
+<meta name="theme-color" content="#EEF0EA">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dagbudget">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div id="boot" class="boot">Laden…</div>
+
+<!-- ============ INLOGGEN ============ -->
+<section id="screen-auth" class="screen">
+  <div class="auth-wrap">
+    <div class="auth-mark">
+      <span class="auth-num">2140</span>
+      <span class="auth-unit">kcal</span>
+    </div>
+    <h1 class="auth-title">Je dag als budget</h1>
+    <p class="auth-sub">Fotografeer wat je eet. De rest telt zichzelf op.</p>
+
+    <form id="form-auth" class="stack" novalidate>
+      <label class="field">
+        <span>E-mailadres</span>
+        <input type="email" id="auth-email" autocomplete="email" required placeholder="naam@voorbeeld.nl">
+      </label>
+      <label class="field">
+        <span>Wachtwoord</span>
+        <input type="password" id="auth-password" autocomplete="current-password" required minlength="8" placeholder="Minimaal 8 tekens">
+      </label>
+      <p id="auth-error" class="msg msg-error" hidden></p>
+      <p id="auth-notice" class="msg msg-ok" hidden></p>
+      <button type="submit" class="btn btn-primary" id="auth-submit">Inloggen</button>
+      <button type="button" class="btn btn-quiet" id="auth-toggle">Nog geen account? Aanmelden</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ PROFIEL INSTELLEN ============ -->
+<section id="screen-onboarding" class="screen">
+  <div class="page">
+    <header class="page-head">
+      <h1>Je gegevens</h1>
+      <p class="lede">Hiermee rekenen we je dagbudget en eiwitbehoefte uit. Je kunt dit later aanpassen.</p>
+    </header>
+
+    <form id="form-profile" class="stack" novalidate>
+      <div class="row-2">
+        <label class="field">
+          <span>Geslacht</span>
+          <select id="p-gender">
+            <option value="male">Man</option>
+            <option value="female">Vrouw</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Leeftijd</span>
+          <input type="number" id="p-age" min="13" max="120" inputmode="numeric" placeholder="34">
+        </label>
+      </div>
+
+      <div class="row-2">
+        <label class="field">
+          <span>Lengte (cm)</span>
+          <input type="number" id="p-height" min="100" max="250" inputmode="numeric" placeholder="178">
+        </label>
+        <label class="field">
+          <span>Gewicht nu (kg)</span>
+          <input type="number" id="p-weight" min="30" max="400" step="0.1" inputmode="decimal" placeholder="88.4">
+        </label>
+      </div>
+
+      <div class="row-2">
+        <label class="field">
+          <span>Streefgewicht (kg)</span>
+          <input type="number" id="p-goal-weight" min="30" max="300" step="0.1" inputmode="decimal" placeholder="79">
+        </label>
+        <label class="field">
+          <span>Tempo per week</span>
+          <select id="p-rate">
+            <option value="0.25">Rustig — 0,25 kg</option>
+            <option value="0.5" selected>Gestaag — 0,5 kg</option>
+            <option value="0.75">Stevig — 0,75 kg</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Je dag buiten het sporten om</span>
+        <select id="p-activity">
+          <option value="sedentary">Vooral zittend — kantoor, autorijden</option>
+          <option value="light" selected>Deels op de been</option>
+          <option value="moderate">Veel lopen of staan</option>
+          <option value="active">Fysiek werk</option>
+          <option value="very_active">Zwaar fysiek werk</option>
+        </select>
+      </label>
+
+      <fieldset class="fieldset">
+        <legend>Sporten</legend>
+        <p class="hint">Dit bepaalt hoeveel eiwit je nodig hebt om spiermassa vast te houden terwijl je afvalt.</p>
+
+        <label class="field">
+          <span>Keren per week: <b id="p-days-out">3</b></span>
+          <input type="range" id="p-days" min="0" max="7" step="1" value="3">
+        </label>
+
+        <div class="field">
+          <span>Hoe zwaar gaat het er meestal aan toe?</span>
+          <div class="choices" id="p-intensity" role="radiogroup" aria-label="Intensiteit">
+            <button type="button" role="radio" aria-checked="false" data-value="light">
+              <b>Rustig</b><em>Wandelen, licht fietsen, yoga</em>
+            </button>
+            <button type="button" role="radio" aria-checked="true" data-value="moderate" class="on">
+              <b>Stevig</b><em>Zweten, praten kan nog</em>
+            </button>
+            <button type="button" role="radio" aria-checked="false" data-value="intense">
+              <b>Zwaar</b><em>Krachttraining, intervallen</em>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>Wat voor training vooral?</span>
+          <div class="choices choices-row" id="p-type" role="radiogroup" aria-label="Soort training">
+            <button type="button" role="radio" aria-checked="false" data-value="cardio"><b>Cardio</b></button>
+            <button type="button" role="radio" aria-checked="true" data-value="mixed" class="on"><b>Gemengd</b></button>
+            <button type="button" role="radio" aria-checked="false" data-value="strength"><b>Kracht</b></button>
+          </div>
+        </div>
+      </fieldset>
+
+      <div id="preview" class="preview" hidden>
+        <div class="preview-head">Met deze gegevens</div>
+        <div class="preview-num"><b id="pv-kcal">–</b> kcal per dag</div>
+        <div class="preview-macros">
+          <span><i class="dot dot-p"></i><b id="pv-p">–</b> g eiwit</span>
+          <span><i class="dot dot-c"></i><b id="pv-c">–</b> g koolhydraten</span>
+          <span><i class="dot dot-f"></i><b id="pv-f">–</b> g vet</span>
+        </div>
+        <p class="preview-note" id="pv-note"></p>
+      </div>
+
+      <p id="profile-error" class="msg msg-error" hidden></p>
+      <button type="submit" class="btn btn-primary" id="profile-submit">Opslaan en beginnen</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ VANDAAG ============ -->
+<section id="screen-today" class="screen">
+  <div class="page">
+    <header class="today-head">
+      <p class="today-date" id="today-date"></p>
+      <div class="budget">
+        <b class="budget-num" id="budget-num">0</b>
+        <span class="budget-unit">kcal <span id="budget-word">over</span></span>
+      </div>
+      <p class="budget-sub" id="budget-sub"></p>
+    </header>
+
+    <div class="ledger" id="ledger" aria-hidden="true"></div>
+    <p class="ledger-key" id="ledger-key"></p>
+
+    <div class="macros" id="macros"></div>
+
+    <div class="meals">
+      <div class="meals-head">
+        <h2>Gegeten vandaag</h2>
+        <span id="meals-count"></span>
+      </div>
+      <div id="meals-list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TOEVOEGEN ============ -->
+<section id="screen-add" class="screen">
+  <div class="page">
+    <header class="page-head">
+      <h1>Maaltijd toevoegen</h1>
+    </header>
+
+    <div id="add-step-photo">
+      <label class="dropzone" for="photo-input">
+        <span class="dropzone-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.2-2h8.2l1.2 2h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>
+            <circle cx="12" cy="13" r="3.4"/>
+          </svg>
+        </span>
+        <b>Foto van je bord</b>
+        <em>Camera of galerij</em>
+        <input type="file" id="photo-input" accept="image/*" capture="environment" hidden>
+      </label>
+      <button type="button" class="btn btn-quiet" id="skip-photo">Zonder foto invoeren</button>
+    </div>
+
+    <div id="add-step-review" hidden>
+      <img id="photo-preview" class="shot" alt="Je maaltijd">
+      <div id="analysing" class="analysing" hidden>
+        <span class="pulse"></span> Bord bekijken…
+      </div>
+
+      <form id="form-meal" class="stack" novalidate>
+        <label class="field">
+          <span>Wat is het?</span>
+          <input type="text" id="m-name" placeholder="Bijvoorbeeld: kip met rijst en broccoli">
+        </label>
+
+        <div class="row-2">
+          <label class="field">
+            <span>Calorieën</span>
+            <input type="number" id="m-kcal" min="0" step="1" inputmode="numeric">
+          </label>
+          <label class="field">
+            <span>Moment</span>
+            <select id="m-type">
+              <option value="breakfast">Ontbijt</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Avondeten</option>
+              <option value="snack">Tussendoor</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row-3">
+          <label class="field">
+            <span>Eiwit (g)</span>
+            <input type="number" id="m-protein" min="0" step="0.1" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span>Koolh. (g)</span>
+            <input type="number" id="m-carbs" min="0" step="0.1" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span>Vet (g)</span>
+            <input type="number" id="m-fat" min="0" step="0.1" inputmode="decimal">
+          </label>
+        </div>
+
+        <p id="confidence" class="confidence" hidden></p>
+        <p id="meal-error" class="msg msg-error" hidden></p>
+
+        <button type="submit" class="btn btn-primary" id="meal-submit">Opslaan</button>
+        <button type="button" class="btn btn-quiet" id="meal-cancel">Annuleren</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VOORTGANG ============ -->
+<section id="screen-progress" class="screen">
+  <div class="page">
+    <header class="page-head">
+      <h1>Voortgang</h1>
+    </header>
+
+    <form id="form-weight" class="weigh">
+      <label class="field">
+        <span>Gewicht vandaag (kg)</span>
+        <input type="number" id="w-value" min="30" max="400" step="0.1" inputmode="decimal" placeholder="88.4">
+      </label>
+      <button type="submit" class="btn btn-primary">Wegen</button>
+    </form>
+    <p id="weight-error" class="msg msg-error" hidden></p>
+
+    <div class="trend">
+      <div class="trend-head">
+        <h2>Gewicht</h2>
+        <span id="trend-delta"></span>
+      </div>
+      <svg id="trend-chart" viewBox="0 0 320 120" preserveAspectRatio="none" role="img" aria-label="Gewichtsverloop"></svg>
+      <p class="hint" id="trend-empty">Nog te weinig metingen voor een lijn. Weeg je een paar keer, dan verschijnt hij hier.</p>
+    </div>
+
+    <div class="days">
+      <h2>Laatste dagen</h2>
+      <div id="days-list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROFIEL ============ -->
+<section id="screen-profile" class="screen">
+  <div class="page">
+    <header class="page-head">
+      <h1>Instellingen</h1>
+      <p class="lede" id="profile-email"></p>
+    </header>
+    <div class="targets" id="targets-summary"></div>
+    <button type="button" class="btn" id="edit-profile">Gegevens aanpassen</button>
+    <button type="button" class="btn btn-quiet" id="sign-out">Uitloggen</button>
+  </div>
+</section>
+
+<!-- ============ NAVIGATIE ============ -->
+<nav id="nav" class="nav" hidden>
+  <button type="button" data-screen="today" class="on">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 18V9m5 9V5m5 13v-7m5 7V8"/></svg>
+    <span>Vandaag</span>
+  </button>
+  <button type="button" data-screen="add" class="nav-add">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    <span>Toevoegen</span>
+  </button>
+  <button type="button" data-screen="progress">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l5-5 3.5 3.5L20 6"/></svg>
+    <span>Voortgang</span>
+  </button>
+  <button type="button" data-screen="profile">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.2-3.4 3.9-5 7-5s5.8 1.6 7 5"/></svg>
+    <span>Jij</span>
+  </button>
+</nav>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
