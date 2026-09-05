@@ -4,7 +4,7 @@
 
 // Ophogen bij elke wijziging aan de bestanden hieronder, anders blijven
 // bezoekers op de oude versie hangen.
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL = `shell-${VERSION}`;
 const RUNTIME = `runtime-${VERSION}`;
 
