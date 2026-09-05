@@ -181,9 +181,66 @@ function translateAuthError(err) {
   if (m.includes("invalid login")) return "E-mailadres of wachtwoord klopt niet.";
   if (m.includes("already registered")) return "Dit adres heeft al een account. Log in.";
   if (m.includes("email not confirmed")) return "Bevestig eerst je e-mailadres via de link in je mail.";
-  if (m.includes("rate limit")) return "Te veel pogingen. Wacht even en probeer opnieuw.";
+  if (m.includes("rate limit") || m.includes("too many")) return "Te veel pogingen. Wacht even en probeer opnieuw.";
+  if (m.includes("should be different")) return "Kies een ander wachtwoord dan je vorige.";
+  if (m.includes("weak") || m.includes("password should be at least"))
+    return "Dit wachtwoord is te zwak. Maak het langer of minder voor de hand liggend.";
+  if (m.includes("expired") || m.includes("invalid") && m.includes("token"))
+    return "Deze herstellink is verlopen. Vraag een nieuwe aan.";
   return err?.message || "Er ging iets mis. Probeer het opnieuw.";
 }
+
+$("auth-forgot").addEventListener("click", async () => {
+  fail("auth-error", "");
+  $("auth-notice").hidden = true;
+
+  const email = $("auth-email").value.trim();
+  if (!email) return fail("auth-error", "Vul eerst je e-mailadres in, dan sturen we een herstellink.");
+
+  $("auth-forgot").disabled = true;
+  try {
+    const { error } = await db.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    if (error) throw error;
+
+    // Bewust geen onderscheid tussen bestaande en onbekende adressen: anders
+    // kan iemand via dit formulier uitvissen wie hier een account heeft.
+    $("auth-notice").textContent =
+      "Als dit adres bij ons bekend is, staat er een herstellink in je mail. Check ook je spam.";
+    $("auth-notice").hidden = false;
+  } catch (err) {
+    fail("auth-error", translateAuthError(err));
+  } finally {
+    $("auth-forgot").disabled = false;
+  }
+});
+
+$("form-newpass").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  fail("np-error", "");
+
+  const pw = $("np-password").value;
+  const confirm = $("np-confirm").value;
+
+  if (pw.length < 8) return fail("np-error", "Je wachtwoord moet minstens 8 tekens hebben.");
+  if (pw !== confirm) return fail("np-error", "De twee wachtwoorden zijn niet gelijk.");
+
+  $("np-submit").disabled = true;
+  try {
+    const { error } = await db.auth.updateUser({ password: pw });
+    if (error) throw error;
+
+    herstelModus = false;
+    $("form-newpass").reset();
+    toast("Wachtwoord opgeslagen");
+    await naAuthWijziging();
+  } catch (err) {
+    fail("np-error", translateAuthError(err));
+  } finally {
+    $("np-submit").disabled = false;
+  }
+});
 
 $("sign-out").addEventListener("click", async () => {
   await db.auth.signOut();
@@ -775,8 +832,16 @@ $("nav").addEventListener("click", (e) => {
 // Supabase houdt tijdens deze callback een interne vergrendeling vast. Andere
 // Supabase-aanroepen hierbinnen afwachten kan blijven hangen, waardoor de app
 // halverwege blijft staan. Daarom zetten we het echte werk buiten de callback.
-db.auth.onAuthStateChange((_event, session) => {
+let herstelModus = false;
+
+db.auth.onAuthStateChange((event, session) => {
   state.user = session?.user ?? null;
+
+  // Klikt iemand op de herstellink uit de mail, dan logt Supabase hem in en
+  // stuurt dit signaal. Zonder deze afslag belandt hij gewoon op zijn dagbudget
+  // en verandert er nooit een wachtwoord.
+  if (event === "PASSWORD_RECOVERY") herstelModus = true;
+
   setTimeout(() => naAuthWijziging(), 0);
 });
 
@@ -785,7 +850,14 @@ async function naAuthWijziging() {
 
   if (!state.user) {
     $("nav").hidden = true;
+    herstelModus = false;
     show("auth");
+    return;
+  }
+
+  if (herstelModus) {
+    $("nav").hidden = true;
+    show("newpass");
     return;
   }
 
