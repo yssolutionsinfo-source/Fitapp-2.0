@@ -236,6 +236,23 @@
         <input type="file" id="photo-input" accept="image/*" hidden>
       </label>
       <button type="button" class="btn btn-quiet" id="skip-photo">Zonder foto invoeren</button>
+
+      <div class="quick">
+        <div class="quick-head">
+          <h2>Of kies snel</h2>
+        </div>
+
+        <div id="quick-favorites" hidden>
+          <p class="quick-label">Wat jij vaak eet</p>
+          <div class="chips" id="chips-favorites"></div>
+        </div>
+
+        <p class="quick-label">Standaardporties</p>
+        <div class="chips" id="chips-common"></div>
+        <p class="hint quick-note">
+          Richtwaarden voor één portie. At je meer of minder, pas de cijfers daarna aan.
+        </p>
+      </div>
     </div>
 
     <div id="add-step-review" hidden>
