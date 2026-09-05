@@ -267,9 +267,17 @@ bindPicker("p-intensity");
 bindPicker("p-type");
 
 $("p-days").addEventListener("input", (e) => {
-  $("p-days-out").textContent = e.target.value;
+  $("p-days-out").textContent = e.target.value === "0" ? "niet" : e.target.value;
+  toonTrainingsVragen();
   previewTargets();
 });
+
+// Wie niet traint, hoeft niet te vertellen hoe zwaar of wat voor soort.
+function toonTrainingsVragen() {
+  const traint = parseInt($("p-days").value, 10) > 0;
+  $("training-details").hidden = !traint;
+  $("p-no-training").hidden = traint;
+}
 ["p-gender", "p-age", "p-height", "p-weight", "p-goal-weight", "p-rate", "p-activity"].forEach((id) =>
   $(id).addEventListener("input", previewTargets)
 );
@@ -302,9 +310,11 @@ function previewTargets() {
   $("pv-f").textContent = Math.round(t.fat_g);
 
   const parts = [
-    `${t.protein_per_kg} g eiwit per kilo, op basis van ${p.training_days_per_week}× per week ${
-      { light: "rustig", moderate: "stevig", intense: "zwaar" }[p.training_intensity]
-    } trainen.`,
+    p.training_days_per_week > 0
+      ? `${t.protein_per_kg} g eiwit per kilo, op basis van ${p.training_days_per_week}× per week ${
+          { light: "rustig", moderate: "stevig", intense: "zwaar" }[p.training_intensity]
+        } trainen.`
+      : `${t.protein_per_kg} g eiwit per kilo. Dat is de basisbehoefte als je niet traint.`,
   ];
   if (t.protein_basis === "goal_weight") parts.push("Gerekend over je streefgewicht.");
   if (t.floored)
@@ -370,7 +380,7 @@ function fillProfileForm() {
   $("p-rate").value = p.goal_rate_kg_per_week ?? 0.5;
   $("p-activity").value = p.activity_level;
   $("p-days").value = p.training_days_per_week ?? 3;
-  $("p-days-out").textContent = p.training_days_per_week ?? 3;
+  $("p-days-out").textContent = (p.training_days_per_week ?? 3) === 0 ? "niet" : (p.training_days_per_week ?? 3);
   ["p-intensity", "p-type"].forEach((id) => {
     const val = id === "p-intensity" ? p.training_intensity : p.training_type;
     $(id).querySelectorAll("button").forEach((b) => {
@@ -378,12 +388,19 @@ function fillProfileForm() {
       b.setAttribute("aria-checked", b.dataset.value === val ? "true" : "false");
     });
   });
+  toonTrainingsVragen();
   previewTargets();
 }
 
 /* ======================= FOTO EN ANALYSE ======================= */
 
+// Op telefoons komt de tik waarmee je de camera bevestigt soms dóór op de
+// pagina eronder, en daar zit de navigatiebalk. Even doof zijn voorkomt dat je
+// ongevraagd van scherm wisselt en je foto kwijt bent.
+let laatsteFotoKeuze = 0;
+
 $("photo-input").addEventListener("change", async (e) => {
+  laatsteFotoKeuze = Date.now();
   const file = e.target.files?.[0];
   if (!file) return;
   const shrunk = await shrink(file);
@@ -796,6 +813,9 @@ function renderProfile() {
   const p = state.profile;
   if (!t || !p) return;
   const intensity = { light: "rustig", moderate: "stevig", intense: "zwaar" }[p.training_intensity];
+  const training = p.training_days_per_week > 0
+    ? `${p.training_days_per_week}× ${intensity}`
+    : "Geen";
   $("targets-summary").innerHTML = `
     <div class="target-row"><span>Dagbudget</span><b>${Math.round(t.calorie_target)} kcal</b></div>
     <div class="target-row"><span>Eiwit</span><b>${Math.round(t.protein_g)} g</b></div>
@@ -803,7 +823,7 @@ function renderProfile() {
     <div class="target-row"><span>Vet</span><b>${Math.round(t.fat_g)} g</b></div>
     <div class="target-row"><span>Onderhoudsniveau</span><b>${Math.round(t.tdee_kcal)} kcal</b></div>
     <div class="target-row"><span>Eiwitfactor</span><b>${t.protein_per_kg} g/kg</b></div>
-    <div class="target-row"><span>Training</span><b>${p.training_days_per_week}× ${intensity}</b></div>`;
+    <div class="target-row"><span>Training</span><b>${training}</b></div>`;
 }
 
 /* ======================= NAVIGATIE ======================= */
@@ -811,6 +831,11 @@ function renderProfile() {
 $("nav").addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
+
+  // Vlak na het kiezen van een foto is elke navigatieklik verdacht: dat is de
+  // tik waarmee je de camera bevestigde die doorkomt op de pagina.
+  if (Date.now() - laatsteFotoKeuze < 1200) return;
+
   const screen = btn.dataset.screen;
 
   // Eerst wisselen, dan pas tekenen. Andersom blijft de knop dood aanvoelen
@@ -821,7 +846,9 @@ $("nav").addEventListener("click", (e) => {
     if (screen === "today") renderToday();
     if (screen === "progress") renderProgress();
     if (screen === "profile") renderProfile();
-    if (screen === "add") resetAddScreen();
+    // Alleen leegmaken als er niets onafgemaakts staat, anders gooi je de foto
+    // weg van iemand die even op een ander tabblad keek.
+    if (screen === "add" && !state.photo && !state.analysis) resetAddScreen();
   } catch (err) {
     console.error("Tekenen van scherm mislukte:", screen, err);
   }
