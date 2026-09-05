@@ -402,7 +402,7 @@ function fillProfileForm() {
 // ongevraagd van scherm wisselt en je foto kwijt bent.
 let laatsteFotoKeuze = 0;
 
-$("photo-input").addEventListener("change", async (e) => {
+async function verwerkFoto(e) {
   laatsteFotoKeuze = Date.now();
   const file = e.target.files?.[0];
   if (!file) return;
@@ -413,7 +413,10 @@ $("photo-input").addEventListener("change", async (e) => {
   $("add-step-photo").hidden = true;
   $("add-step-review").hidden = false;
   analyse(shrunk.base64);
-});
+}
+
+$("photo-input").addEventListener("change", verwerkFoto);
+$("photo-camera").addEventListener("change", verwerkFoto);
 
 $("skip-photo").addEventListener("click", () => {
   state.photo = null;
@@ -514,6 +517,11 @@ $("meal-cancel").addEventListener("click", resetAddScreen);
 function resetAddScreen() {
   $("form-meal").reset();
   $("photo-input").value = "";
+  $("photo-camera").value = "";
+  $("food-search").value = "";
+  $("chips-search").innerHTML = "";
+  $("search-status").hidden = true;
+  zoekResultaten = [];
   $("add-step-review").hidden = true;
   $("add-step-photo").hidden = false;
   $("confidence").hidden = true;
@@ -642,9 +650,20 @@ function kiesSnel(e) {
   const btn = e.target.closest(".chip");
   if (!btn) return;
 
-  const lijst = btn.dataset.bron === "favoriet" ? favorieten : STANDAARD;
+  const lijst =
+    btn.dataset.bron === "favoriet" ? favorieten
+    : btn.dataset.bron === "zoek" ? zoekResultaten
+    : STANDAARD;
   const item = lijst[Number(btn.dataset.index)];
   if (!item) return;
+
+  // Bijhouden wat je vaak kiest, zodat het bovenaan komt te staan.
+  if (item.foodId) {
+    db.from("foods")
+      .update({ times_used: (item.times_used ?? 0) + 1 })
+      .eq("id", item.foodId)
+      .then(() => {}, (err) => console.error("Teller bijwerken mislukte:", err));
+  }
 
   state.photo = null;
   state.analysis = null;
@@ -666,6 +685,144 @@ function kiesSnel(e) {
 
 $("chips-common").addEventListener("click", kiesSnel);
 $("chips-favorites").addEventListener("click", kiesSnel);
+
+/* ======================= ZOEKEN ======================= */
+
+let zoekResultaten = [];
+let zoekTimer;
+
+$("food-search").addEventListener("input", (e) => {
+  const q = e.target.value.trim();
+  clearTimeout(zoekTimer);
+
+  if (q.length < 2) {
+    zoekResultaten = [];
+    $("chips-search").innerHTML = "";
+    $("search-status").hidden = true;
+    return;
+  }
+
+  // Even wachten met zoeken: anders vuur je bij elke aanslag een verzoek af
+  // naar een database die daar niet op zit te wachten.
+  zoekTimer = setTimeout(() => zoek(q), 350);
+});
+
+async function zoek(q) {
+  $("search-status").hidden = false;
+  $("search-status").textContent = "Zoeken…";
+
+  const laag = q.toLowerCase();
+  const gevonden = [];
+
+  // 1. De standaardlijst, want die is meteen beschikbaar en betrouwbaar.
+  for (const x of STANDAARD) {
+    if (x.name.toLowerCase().includes(laag)) gevonden.push({ ...x, herkomst: "standaard" });
+  }
+
+  // 2. Je eigen producten. Die wegen zwaarder dan wat dan ook: jij hebt ze zelf
+  //    gecontroleerd.
+  try {
+    const uid = await gebruikerId();
+    if (uid) {
+      const { data } = await db
+        .from("foods")
+        .select("*")
+        .ilike("name", `%${q}%`)
+        .order("times_used", { ascending: false })
+        .limit(8);
+      for (const f of data ?? []) {
+        gevonden.unshift({
+          name: f.name,
+          portie: f.portion_label || "eigen product",
+          calories: Number(f.calories),
+          protein_g: Number(f.protein_g),
+          carbs_g: Number(f.carbs_g),
+          fat_g: Number(f.fat_g),
+          herkomst: "eigen",
+          foodId: f.id,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Eigen producten zoeken mislukte:", err);
+  }
+
+  // 3. Open Food Facts: een openbare database met verpakte producten, inclusief
+  //    Nederlandse merken. Waarden per 100 g, want dat staat op het etiket.
+  try {
+    const url =
+      "https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=8" +
+      "&fields=product_name,brands,nutriments&search_terms=" +
+      encodeURIComponent(q);
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      for (const p of data.products ?? []) {
+        const n = p.nutriments || {};
+        const kcal = Number(n["energy-kcal_100g"]);
+        if (!p.product_name || !Number.isFinite(kcal) || kcal <= 0) continue;
+        gevonden.push({
+          name: [p.product_name, p.brands?.split(",")[0]?.trim()].filter(Boolean).join(" — ").slice(0, 60),
+          portie: "100 g",
+          calories: round(kcal, 0),
+          protein_g: round(Number(n.proteins_100g) || 0, 1),
+          carbs_g: round(Number(n.carbohydrates_100g) || 0, 1),
+          fat_g: round(Number(n.fat_100g) || 0, 1),
+          herkomst: "openfoodfacts",
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Open Food Facts onbereikbaar:", err);
+  }
+
+  zoekResultaten = gevonden.slice(0, 14);
+  $("chips-search").innerHTML = zoekResultaten.map((x, i) => chipHtml(x, i, "zoek")).join("");
+
+  if (!zoekResultaten.length) {
+    $("search-status").textContent =
+      "Niets gevonden. Vul de waarden hieronder zelf in en bewaar het als eigen product.";
+  } else {
+    $("search-status").hidden = true;
+  }
+}
+
+$("chips-search").addEventListener("click", kiesSnel);
+
+$("save-food").addEventListener("click", async () => {
+  fail("meal-error", "");
+  const name = $("m-name").value.trim();
+  const kcal = parseFloat($("m-kcal").value);
+
+  if (!name) return fail("meal-error", "Geef het product eerst een naam.");
+  if (!(kcal >= 0)) return fail("meal-error", "Vul het aantal calorieën in.");
+
+  $("save-food").disabled = true;
+  try {
+    const uid = await gebruikerId();
+    if (!uid) throw new Error("Je sessie is verlopen. Log opnieuw in.");
+
+    const { error } = await db.from("foods").upsert(
+      {
+        user_id: uid,
+        name,
+        portion_label: "1 portie",
+        calories: kcal,
+        protein_g: parseFloat($("m-protein").value) || 0,
+        carbs_g: parseFloat($("m-carbs").value) || 0,
+        fat_g: parseFloat($("m-fat").value) || 0,
+        source: "eigen",
+      },
+      { onConflict: "user_id,name" }
+    );
+    if (error) throw error;
+    toast("Bewaard bij je eigen producten");
+  } catch (err) {
+    fail("meal-error", err.message || "Bewaren lukte niet.");
+  } finally {
+    $("save-food").disabled = false;
+  }
+});
 
 /* ======================= GEWICHT ======================= */
 
@@ -737,6 +894,22 @@ function daysAgo(n) {
 
 const MACRO_COLORS = { protein: "#1F5F8B", carbs: "#C08A2E", fat: "#8E4B6B" };
 
+// Tonaal opgebouwd, van licht naar donker in de volgorde van de dag. Dat leest
+// als verstrijkende tijd en botst niet met de macrokleuren eronder.
+const MEAL_COLORS = {
+  breakfast: "#8FB79D",
+  lunch: "#4E7B69",
+  dinner: "#2A4438",
+  snack: "#CAD3C5",
+};
+
+const MEAL_LABELS = {
+  breakfast: "Ontbijt",
+  lunch: "Lunch",
+  dinner: "Avondeten",
+  snack: "Tussendoor",
+};
+
 function renderToday() {
   const t = state.targets;
   const meals = state.meals.filter((m) => m.eaten_on === today());
@@ -764,22 +937,43 @@ function renderToday() {
     `${Math.round(sum.kcal).toLocaleString("nl-NL")} van ${Math.round(budget).toLocaleString("nl-NL")} kcal gegeten` +
     (left < 0 ? ". Eén dag boven je budget maakt je week niet stuk." : "");
 
-  // Ledger: elke maaltijd is een segment, in de volgorde waarin je hem at.
+  // Ledger: elke maaltijd is een segment, in de volgorde waarin je hem at,
+  // gekleurd naar het moment van de dag.
   const ledger = $("ledger");
   ledger.innerHTML = "";
   const chrono = [...meals].reverse();
-  chrono.forEach((m, i) => {
+  chrono.forEach((m) => {
     const span = document.createElement("span");
     span.style.width = `${Math.min((Number(m.calories) / budget) * 100, 100)}%`;
-    span.style.background = shade(i);
+    span.style.background = MEAL_COLORS[m.meal_type] ?? MEAL_COLORS.snack;
+    span.title = `${MEAL_LABELS[m.meal_type] ?? "Tussendoor"}: ${escapeHtml(m.name)}`;
     ledger.appendChild(span);
   });
   const rest = document.createElement("span");
   rest.className = "rest";
   ledger.appendChild(rest);
-  $("ledger-key").textContent = meals.length
-    ? `${meals.length} ${meals.length === 1 ? "maaltijd" : "maaltijden"}, oudste links.`
-    : "Nog niets gelogd vandaag.";
+
+  // Legenda met alleen de momenten die vandaag voorkomen, met hun totaal. Een
+  // vaste legenda met lege categorieën leidt alleen maar af.
+  if (!meals.length) {
+    $("ledger-key").textContent = "Nog niets gelogd vandaag.";
+  } else {
+    const perMoment = new Map();
+    for (const m of meals) {
+      const soort = MEAL_COLORS[m.meal_type] ? m.meal_type : "snack";
+      perMoment.set(soort, (perMoment.get(soort) ?? 0) + Number(m.calories));
+    }
+    const volgorde = ["breakfast", "lunch", "dinner", "snack"];
+    $("ledger-key").innerHTML = volgorde
+      .filter((s) => perMoment.has(s))
+      .map(
+        (s) =>
+          `<span class="key-item"><i class="key-dot" style="background:${MEAL_COLORS[s]}"></i>${
+            MEAL_LABELS[s]
+          } ${Math.round(perMoment.get(s))}</span>`
+      )
+      .join("");
+  }
 
   // Macro's
   $("macros").innerHTML = [
@@ -801,8 +995,10 @@ function renderToday() {
       <div class="meal">
         ${m.photo_path ? `<img class="meal-thumb" data-path="${m.photo_path}" alt="">` : `<div class="meal-thumb"></div>`}
         <div class="meal-body">
-          <div class="meal-name">${escapeHtml(m.name)}</div>
-          <div class="meal-meta">${fmtTime(m.eaten_at)} · E ${Math.round(m.protein_g)} · K ${Math.round(m.carbs_g)} · V ${Math.round(m.fat_g)}</div>
+          <div class="meal-name">
+            <i class="key-dot" style="background:${MEAL_COLORS[m.meal_type] ?? MEAL_COLORS.snack}"></i>${escapeHtml(m.name)}
+          </div>
+          <div class="meal-meta">${MEAL_LABELS[m.meal_type] ?? "Tussendoor"} · ${fmtTime(m.eaten_at)} · E ${Math.round(m.protein_g)} · K ${Math.round(m.carbs_g)} · V ${Math.round(m.fat_g)}</div>
         </div>
         <div style="text-align:right">
           <div class="meal-kcal">${Math.round(m.calories)}</div>
@@ -839,13 +1035,6 @@ function macroLine(label, have, target, color) {
       </div>
       <div class="macro-track"><div class="macro-fill" style="width:${pct}%;background:${color}"></div></div>
     </div>`;
-}
-
-// Opeenvolgende maaltijden krijgen iets andere tinten, zodat de segmenten
-// uit elkaar te houden zijn zonder een legenda.
-function shade(i) {
-  const tints = ["#2F4F45", "#3E6557", "#4E7B69", "#5F917B", "#71A78D"];
-  return tints[i % tints.length];
 }
 
 const fmtTime = (iso) =>
