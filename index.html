@@ -45,6 +45,28 @@
       <p id="auth-notice" class="msg msg-ok" hidden></p>
       <button type="submit" class="btn btn-primary" id="auth-submit">Inloggen</button>
       <button type="button" class="btn btn-quiet" id="auth-toggle">Nog geen account? Aanmelden</button>
+      <button type="button" class="btn btn-quiet" id="auth-forgot">Wachtwoord vergeten?</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ NIEUW WACHTWOORD ============ -->
+<section id="screen-newpass" class="screen">
+  <div class="auth-wrap">
+    <h1 class="auth-title">Nieuw wachtwoord</h1>
+    <p class="auth-sub">Kies een wachtwoord dat je nog niet ergens anders gebruikt.</p>
+
+    <form id="form-newpass" class="stack" novalidate>
+      <label class="field">
+        <span>Nieuw wachtwoord</span>
+        <input type="password" id="np-password" autocomplete="new-password" minlength="8" placeholder="Minimaal 8 tekens">
+      </label>
+      <label class="field">
+        <span>Nog een keer</span>
+        <input type="password" id="np-confirm" autocomplete="new-password" minlength="8">
+      </label>
+      <p id="np-error" class="msg msg-error" hidden></p>
+      <button type="submit" class="btn btn-primary" id="np-submit">Wachtwoord opslaan</button>
     </form>
   </div>
 </section>
