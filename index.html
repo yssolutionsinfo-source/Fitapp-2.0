@@ -140,27 +140,34 @@
           <input type="range" id="p-days" min="0" max="7" step="1" value="3">
         </label>
 
-        <div class="field">
-          <span>Hoe zwaar gaat het er meestal aan toe?</span>
-          <div class="choices" id="p-intensity" role="radiogroup" aria-label="Intensiteit">
-            <button type="button" role="radio" aria-checked="false" data-value="light">
-              <b>Rustig</b><em>Wandelen, licht fietsen, yoga</em>
-            </button>
-            <button type="button" role="radio" aria-checked="true" data-value="moderate" class="on">
-              <b>Stevig</b><em>Zweten, praten kan nog</em>
-            </button>
-            <button type="button" role="radio" aria-checked="false" data-value="intense">
-              <b>Zwaar</b><em>Krachttraining, intervallen</em>
-            </button>
-          </div>
-        </div>
+        <p class="hint" id="p-no-training" hidden>
+          Geen trainingen, dus we rekenen met de basisbehoefte: 1,4 g eiwit per kilo.
+          Zet de schuif hoger zodra je begint, dan passen we het doel aan.
+        </p>
 
-        <div class="field">
-          <span>Wat voor training vooral?</span>
-          <div class="choices choices-row" id="p-type" role="radiogroup" aria-label="Soort training">
-            <button type="button" role="radio" aria-checked="false" data-value="cardio"><b>Cardio</b></button>
-            <button type="button" role="radio" aria-checked="true" data-value="mixed" class="on"><b>Gemengd</b></button>
-            <button type="button" role="radio" aria-checked="false" data-value="strength"><b>Kracht</b></button>
+        <div id="training-details">
+          <div class="field">
+            <span>Hoe zwaar gaat het er meestal aan toe?</span>
+            <div class="choices" id="p-intensity" role="radiogroup" aria-label="Intensiteit">
+              <button type="button" role="radio" aria-checked="false" data-value="light">
+                <b>Rustig</b><em>Wandelen, licht fietsen, yoga</em>
+              </button>
+              <button type="button" role="radio" aria-checked="true" data-value="moderate" class="on">
+                <b>Stevig</b><em>Zweten, praten kan nog</em>
+              </button>
+              <button type="button" role="radio" aria-checked="false" data-value="intense">
+                <b>Zwaar</b><em>Krachttraining, intervallen</em>
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>Wat voor training vooral?</span>
+            <div class="choices choices-row" id="p-type" role="radiogroup" aria-label="Soort training">
+              <button type="button" role="radio" aria-checked="false" data-value="cardio"><b>Cardio</b></button>
+              <button type="button" role="radio" aria-checked="true" data-value="mixed" class="on"><b>Gemengd</b></button>
+              <button type="button" role="radio" aria-checked="false" data-value="strength"><b>Kracht</b></button>
+            </div>
           </div>
         </div>
       </fieldset>
@@ -226,7 +233,7 @@
         </span>
         <b>Foto van je bord</b>
         <em>Camera of galerij</em>
-        <input type="file" id="photo-input" accept="image/*" capture="environment" hidden>
+        <input type="file" id="photo-input" accept="image/*" hidden>
       </label>
       <button type="button" class="btn btn-quiet" id="skip-photo">Zonder foto invoeren</button>
     </div>
