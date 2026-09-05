@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-sonnet-5",
         max_tokens: 400,
         messages: [
           {
@@ -84,7 +84,22 @@ module.exports = async (req, res) => {
     if (!upstream.ok) {
       const detail = await upstream.text();
       console.error("Anthropic error", upstream.status, detail);
-      return res.status(502).json({ error: "De analyse gaf geen antwoord." });
+
+      // Eén vage melding voor alles maakte een kapotte configuratie
+      // ononderscheidbaar van een slechte foto. Dat kost dagen zoeken.
+      const uitleg = {
+        400: "Het verzoek werd geweigerd. Waarschijnlijk klopt de modelnaam of de opmaak niet.",
+        401: "De API-sleutel wordt niet geaccepteerd. Controleer ANTHROPIC_API_KEY.",
+        403: "Geen toegang met deze sleutel.",
+        404: "Dit model bestaat niet onder deze naam.",
+        413: "De foto is te groot voor de API.",
+        429: "Te veel verzoeken achter elkaar. Wacht even.",
+        529: "De API is overbelast. Probeer het zo nog eens.",
+      }[upstream.status];
+
+      return res.status(502).json({
+        error: uitleg || `De analyse gaf geen antwoord (status ${upstream.status}).`,
+      });
     }
 
     const data = await upstream.json();
